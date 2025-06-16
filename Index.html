@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>انتقال اطلاعات اکسل</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1rem;
+      background: #f9f9f9;
+      direction: rtl;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: white;
+      padding: 1rem;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    label, input, select, button {
+      font-size: 1rem;
+      margin: 0.5rem 0;
+    }
+
+    .row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .row select {
+      flex: 1;
+    }
+
+    .row button {
+      font-size: 1rem;
+      padding: 0.3rem 0.6rem;
+    }
+
+    #mappings {
+      margin-bottom: 1rem;
+    }
+
+    button {
+      background: #008CBA;
+      color: white;
+      border: none;
+      padding: 0.6rem;
+      border-radius: 6px;
+      width: 100%;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    input[type="file"] {
+      width: 100%;
+      padding: 0.5rem;
+    }
+
+    .msg {
+      text-align: center;
+      margin-top: 1rem;
+      color: green;
+    }
+
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>بارگذاری فایل اکسل</h1>
+    <input type="file" id="excelFile" accept=".xlsx,.xls" />
+    <div id="mappings"></div>
+    <button onclick="addMapping()">➕ افزودن ستون جدید</button>
+    <button onclick="submitData()">📤 ارسال اطلاعات</button>
+    <div class="msg" id="message"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    let mappings = [];
+
+    function addMapping(from = '', to = '') {
+      const div = document.createElement('div');
+      div.className = "row";
+      div.innerHTML = `
+        <select class="from">
+          ${getColumnOptions(from)}
+        </select>
+        <select class="to">
+          ${getColumnOptions(to)}
+        </select>
+        <button onclick="this.parentNode.remove()">❌</button>
+      `;
+      document.getElementById("mappings").appendChild(div);
+    }
+
+    function getColumnOptions(selected = '') {
+      const letters = [...Array(26)].map((_, i) => String.fromCharCode(65 + i));
+      return letters.map(letter =>
+        `<option value="${letter}" ${selected === letter ? "selected" : ""}>${letter}</option>`
+      ).join('');
+    }
+
+    function submitData() {
+      const fileInput = document.getElementById("excelFile");
+      const file = fileInput.files[0];
+      if (!file) return showMessage("فایل را انتخاب کنید", true);
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { header: "A", range: 1 }); // از ردیف دوم شروع کن
+
+        const records = {};
+        document.querySelectorAll("#mappings .row").forEach(row => {
+          const from = row.querySelector(".from").value;
+          const to = row.querySelector(".to").value;
+          const values = json.map(row => [row[from] || ""]);
+          if (!records[to]) records[to] = [];
+          records[to] = records[to].concat(values);
+        });
+
+        sendToServer(records);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function sendToServer(records) {
+      fetch("https://script.google.com/macros/s/AKfycbw0VPMoSMJ1aiTzEkBuB4YHul7Z5KDh8Mf-1o2kY2os7cm_jX3B1zruBBOK8WsMh2VRKg/exec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records }),
+      })
+        .then(res => res.text())
+        .then(msg => showMessage(msg))
+        .catch(err => showMessage("خطا در ارسال داده‌ها", true));
+    }
+
+    function showMessage(msg, isError = false) {
+      const el = document.getElementById("message");
+      el.textContent = msg;
+      el.className = "msg" + (isError ? " error" : "");
+    }
+
+    // ابتدا یک ردیف مپینگ اضافه کن
+    window.onload = () => addMapping();
+  </script>
+</body>
+</html>
