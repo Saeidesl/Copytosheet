@@ -364,63 +364,78 @@
     }
     
     // آپلود داده‌ها به سرور
-    function uploadData() {
-      // جمع‌آوری تنظیمات نگاشت
-      const mappings = [];
-      const mappingRows = document.querySelectorAll('.mapping-row');
-      
-      mappingRows.forEach(row => {
-        const sourceSelect = row.querySelector('.source-select');
-        const targetInput = row.querySelector('.target-input');
-        
-        if (sourceSelect && targetInput && targetInput.value.trim()) {
-          mappings.push({
-            source: sourceSelect.value,
-            target: targetInput.value.trim()
-          });
-        }
-      });
-      
-      if (mappings.length === 0) {
-        return showStatus('حداقل یک ستون برای انتقال باید انتخاب شود', 'error');
-      }
-      
-      // آماده‌سازی داده‌ها برای ارسال
-      const dataToSend = excelData.map(row => {
-        const obj = {};
-        excelHeaders.forEach((header, index) => {
-          obj[header] = row[index] || '';
-        });
-        return obj;
-      });
-      
-      // نمایش وضعیت در حال بارگذاری
-      showStatus('در حال انتقال داده‌ها...', 'info');
-      
-      // ارسال به سرور
-      fetch('https://script.google.com/macros/s/AKfycbx56PQXmPkiphfYAHS_i-72rdsVzDV8DlR5Ct8VnxauUyNaigk240UdY5GtWHJCYmea7g/exec', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          mappings,
-          data: dataToSend
-        })
-      })
-      .then(response => response.json())
-      .then(result => {
-        if (result.success) {
-          showStatus(result.message, 'success');
-        } else {
-          showStatus(result.message, 'error');
-        }
-      })
-      .catch(error => {
-        showStatus(`خطا در ارتباط با سرور: ${error.message}`, 'error');
-      });
+  async function uploadData() {
+  const submitBtn = document.querySelector('.success');
+  const originalText = submitBtn.textContent;
+
+  try {
+    // حالت loading
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'در حال ارسال...';
+    showStatus('در حال انتقال داده‌ها...', 'info');
+
+    // URL وب اپلیکیشن
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyB5YV0FU2GinqtPxvJf7v0-iB4IzV9FlVm8uSlYrMbohLgztvfWt9uVwzCR9dluR-BDg/exec';
+
+    // آماده‌سازی داده‌ها
+    const requestData = {
+      mappings: getMappings(),
+      data: prepareExcelData()
+    };
+
+    // لاگ‌گذاری داده‌های ارسالی
+    console.log('داده‌های ارسالی:', requestData);
+
+    // ارسال درخواست
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestData)
+    });
+
+    // بررسی پاسخ
+    const result = await response.json();
+    if (response.ok && result.success) {
+      showStatus(`✅ ${result.message}`, 'success');
+    } else {
+      throw new Error(result.message || 'خطا در ارتباط با سرور');
     }
-    
+
+  } catch (error) {
+    console.error('Upload Error:', error);
+    showStatus(`خطا در ارسال: ${error.message}`, 'error');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+  }
+}
+
+<!-- اضافه کردن این توابع به بخش script -->
+
+  function getMappings() {
+    const mappings = [];
+    document.querySelectorAll('.mapping-row').forEach(row => {
+      const source = row.querySelector('.source-select')?.value;
+      const target = row.querySelector('.target-input')?.value;
+      if (source && target) {
+        mappings.push({ source, target });
+      }
+    });
+    return mappings;
+  }
+
+  function prepareExcelData() {
+    return excelData.map(row => {
+      const obj = {};
+      excelHeaders.forEach((header, index) => {
+        obj[header] = row[index] || '';
+      });
+      return obj;
+    });
+  }
+
     // نمایش وضعیت
     function showStatus(message, type = 'info') {
       const statusElement = document.getElementById('statusMessage');
